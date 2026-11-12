@@ -87,7 +87,7 @@ def desenhar_nuvem(frequencia):
     ordenadas = ordenadas[:max_palavras]
 
     if not ordenadas:
-        el("nuvem").innerHTML = '<p class="text-slate-400">Sem palavras para mostrar.</p>'
+        el("nuvem").innerHTML = '<p class="text-tinta/60">Sem palavras para mostrar.</p>'
         return
 
     maior = ordenadas[0][1]
@@ -102,7 +102,7 @@ def desenhar_nuvem(frequencia):
             tamanho = 14 + (quantidade - menor) / (maior - menor) * 30
         cor = random.choice(cores)
         html += (
-            f'<span class="inline-block px-1 font-bold transition hover:scale-125" '
+            f'<span class="inline-block px-1 font-bold hover:-translate-y-1" '
             f'style="font-size:{tamanho:.0f}px; color:{cor}" '
             f'title="{escape(palavra)}: {quantidade}x">{escape(palavra)}</span> '
         )
@@ -138,12 +138,12 @@ def analisar_poema():
         html = ""
         for p in encontrados:
             html += (
-                f'<li><span class="font-semibold text-violet-300">{escape(p)}</span>'
+                f'<li><span class="font-semibold text-coral">{escape(p)}</span>'
                 f' → {", ".join(SINONIMOS[p])}</li>'
             )
         el("sinonimos").innerHTML = html
     else:
-        el("sinonimos").innerHTML = '<li class="text-slate-400">Nenhuma palavra com sinónimos conhecidos.</li>'
+        el("sinonimos").innerHTML = '<li class="text-tinta/60">Nenhuma palavra com sinónimos conhecidos.</li>'
 
 
 @when("click", "#btn-reescrever")
@@ -182,15 +182,15 @@ PROPORCOES = {
 
 def categoria_resolucao(largura):
     if largura < 1280:
-        return "SD (baixa resolução)", "bg-red-500/20 text-red-300"
+        return "SD (baixa resolução)", "bg-coral text-branco"
     elif largura < 1920:
-        return "HD (720p)", "bg-amber-500/20 text-amber-300"
+        return "HD (720p)", "bg-pessego text-tinta"
     elif largura < 2560:
-        return "Full HD (1080p)", "bg-emerald-500/20 text-emerald-300"
+        return "Full HD (1080p)", "bg-sol text-tinta"
     elif largura < 3840:
-        return "2K / QHD", "bg-sky-500/20 text-sky-300"
+        return "2K / QHD", "bg-azul text-tinta"
     else:
-        return "4K UHD ou superior", "bg-violet-500/20 text-violet-300"
+        return "4K UHD ou superior", "bg-ceu text-branco"
 
 
 @when("click", "#btn-validar")
@@ -203,11 +203,11 @@ def validar_resolucao():
         largura = int(el("res-largura").value)
         altura = int(el("res-altura").value)
     except ValueError:
-        el("res-resultado").innerHTML = '<p class="text-red-300">Introduz números inteiros válidos.</p>'
+        el("res-resultado").innerHTML = '<p class="font-semibold text-coral">Introduz números inteiros válidos.</p>'
         return
 
     if largura <= 0 or altura <= 0:
-        el("res-resultado").innerHTML = '<p class="text-red-300">Por favor introduz uma resolução válida.</p>'
+        el("res-resultado").innerHTML = '<p class="font-semibold text-coral">Por favor introduz uma resolução válida.</p>'
         return
 
     categoria, cores = categoria_resolucao(max(largura, altura))
@@ -227,11 +227,11 @@ def validar_resolucao():
     megapixeis = largura * altura / 1_000_000
 
     el("res-resultado").innerHTML = f"""
-        <span class="inline-block rounded-full px-3 py-1 text-sm font-semibold {cores}">{categoria}</span>
+        <span class="inline-block border-2 border-tinta px-3 py-1 text-sm font-semibold {cores}">{categoria}</span>
         <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <dt class="text-slate-400">Proporção</dt><dd class="font-mono">{proporcao}</dd>
-            <dt class="text-slate-400">Megapíxeis</dt><dd class="font-mono">{megapixeis:.2f} MP</dd>
-            <dt class="text-slate-400">Total de píxeis</dt><dd class="font-mono">{largura * altura:,}</dd>
+            <dt class="text-tinta/60">Proporção</dt><dd class="font-semibold">{proporcao}</dd>
+            <dt class="text-tinta/60">Megapíxeis</dt><dd class="font-semibold">{megapixeis:.2f} MP</dd>
+            <dt class="text-tinta/60">Total de píxeis</dt><dd class="font-semibold">{largura * altura:,}</dd>
         </dl>
     """
 
@@ -295,13 +295,13 @@ def gerar_paleta():
     for nome, cor in paleta:
         # texto escuro em cores claras e texto claro em cores escuras
         cr, cg, cb = hex_para_rgb(cor)
-        texto = "#0f172a" if (cr * 0.299 + cg * 0.587 + cb * 0.114) > 150 else "#f8fafc"
+        texto = "#1b1926" if (cr * 0.299 + cg * 0.587 + cb * 0.114) > 150 else "#ffffff"
         html += f"""
             <button data-cor="{cor}" title="Copiar {cor}"
-                class="flex h-20 flex-col justify-end rounded-lg p-2 text-left text-xs transition hover:-translate-y-1"
+                class="amostra flex h-20 flex-col justify-end p-2 text-left text-sm"
                 style="background:{cor}; color:{texto}">
                 <span class="font-semibold">{nome}</span>
-                <span class="font-mono">{cor}</span>
+                <span>{cor}</span>
             </button>"""
     el("paleta").innerHTML = html
 
@@ -331,8 +331,8 @@ jogo = {
 }
 
 
-def mostrar_mensagem(texto, cor="text-slate-200"):
-    el("jogo-mensagem").className = f"min-h-12 text-sm {cor}"
+def mostrar_mensagem(texto, cor="text-tinta"):
+    el("jogo-mensagem").className = f"min-h-12 {cor}"
     el("jogo-mensagem").innerHTML = texto
 
 
@@ -346,7 +346,7 @@ def atualizar_jogo():
 
     html = ""
     for numero, cor in jogo["historico"]:
-        html += f'<span class="rounded-md px-2 py-1 font-mono text-xs {cor}">{numero}</span>'
+        html += f'<span class="border-2 border-tinta px-2 py-1 text-sm font-semibold {cor}">{numero}</span>'
     el("jogo-historico").innerHTML = html
 
 
@@ -419,11 +419,11 @@ def tentar():
     try:
         chute = int(el("jogo-chute").value)
     except ValueError:
-        mostrar_mensagem("Digita um número inteiro!", "text-amber-300")
+        mostrar_mensagem("Digita um número inteiro!", "font-semibold text-coral")
         return
 
     if chute < 1 or chute > 100:
-        mostrar_mensagem("Por favor, digita um número entre 1 e 100!", "text-amber-300")
+        mostrar_mensagem("Por favor, digita um número entre 1 e 100!", "font-semibold text-coral")
         return
 
     jogo["tentativas"] += 1
@@ -433,7 +433,7 @@ def tentar():
 
     if chute == secreto:
         jogo["ativo"] = False
-        jogo["historico"].append((chute, "bg-emerald-500/30 text-emerald-200"))
+        jogo["historico"].append((chute, "bg-tinta text-sol"))
         if jogo["tentativas"] == 1:
             elogio = "À primeira?! És um génio! 🤯"
         elif jogo["tentativas"] <= 4:
@@ -443,7 +443,7 @@ def tentar():
         mostrar_mensagem(
             f"<b>UAU, acertaste!</b> O número secreto era {secreto}. "
             f"Precisaste de {jogo['tentativas']} tentativa(s). {elogio}",
-            "text-emerald-300",
+            "border-2 border-tinta bg-sol p-2",
         )
         terminar_jogo()
         return
@@ -460,23 +460,23 @@ def tentar():
     distancia = abs(chute - secreto)
     if distancia <= 3:
         temperatura = "🔥 A ferver!"
-        cor = "bg-red-500/30 text-red-200"
+        cor = "bg-coral text-branco"
     elif distancia <= 10:
         temperatura = "♨️ Quente"
-        cor = "bg-orange-500/30 text-orange-200"
+        cor = "bg-pessego text-tinta"
     elif distancia <= 25:
         temperatura = "🌤️ Morno"
-        cor = "bg-yellow-500/30 text-yellow-200"
+        cor = "bg-sol text-tinta"
     else:
         temperatura = "❄️ Frio"
-        cor = "bg-sky-500/30 text-sky-200"
+        cor = "bg-ceu text-branco"
     jogo["historico"].append((chute, cor))
 
     if jogo["tentativas"] >= jogo["total"]:
         jogo["ativo"] = False
         mostrar_mensagem(
             f"Perdeste! O número secreto era <b>{secreto}</b>. Tenta outra vez! 🔁",
-            "text-red-300",
+            "border-2 border-tinta bg-coral p-2 text-branco",
         )
         terminar_jogo()
         return
@@ -485,7 +485,7 @@ def tentar():
     texto = f"{direcao} {temperatura}<br>"
     if dica:
         texto += f"💡 Dica: {dica}<br>"
-    texto += f"<span class='text-slate-400'>{mensagem_motivacional()}</span>"
+    texto += f"<span class='text-tinta/60'>{mensagem_motivacional()}</span>"
     mostrar_mensagem(texto)
     atualizar_jogo()
 

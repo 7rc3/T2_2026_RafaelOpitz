@@ -1,9 +1,14 @@
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-PT" data-tema="noite">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Multimédia com IA</title>
+
+    <!-- Fontes pixel do Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=Press+Start+2P&display=swap" rel="stylesheet">
 
     <!-- Tailwind CSS (versão browser, sem build) -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11"></script>
@@ -11,169 +16,735 @@
     <!-- PyScript: corre o Python (app.py) dentro do browser -->
     <link rel="stylesheet" href="https://pyscript.net/releases/2025.11.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2025.11.1/core.js"></script>
+
+    <style type="text/tailwindcss">
+        /* =========================================================
+           PALETA DE CORES (variáveis CSS)
+           O Tailwind transforma cada --color-xxx numa classe:
+           --color-coral  ->  bg-coral, text-coral, border-coral...
+           ========================================================= */
+        @theme static {
+            --font-pixel: "Pixelify Sans", monospace;   /* texto normal */
+            --font-barra: "Press Start 2P", monospace;  /* barra de tarefas */
+
+            --color-noite:   #2b2838;  /* fundo do ambiente de trabalho */
+            --color-tinta:   #1b1926;  /* contornos, sombras e texto */
+            --color-gelo:    #b8ecf5;  /* barra de tarefas */
+            --color-azul:    #6cc4e0;  /* zonas mais escuras da barra e títulos */
+            --color-pessego: #f7b46a;  /* botões */
+            --color-coral:   #e8533f;  /* destaques e avisos */
+            --color-ceu:     #5fa8d8;  /* seleção */
+            --color-sol:     #f5d547;  /* hover e sucesso */
+            --color-branco:  #ffffff;  /* etiquetas e janelas */
+        }
+
+        /* Segundo tema ("pôr do sol"): só troca algumas variáveis */
+        html[data-tema="por-do-sol"] {
+            --color-noite: #3b2532;
+            --color-gelo:  #fde2c2;
+            --color-azul:  #f7b46a;
+        }
+
+        /* =========================================================
+           REGRAS GERAIS DO ESTILO PIXEL
+           ========================================================= */
+        * {
+            border-radius: 0 !important;   /* nada de cantos redondos */
+        }
+
+        img, canvas, svg {
+            image-rendering: pixelated;    /* píxeis nítidos ao aumentar */
+        }
+
+        body {
+            font-family: var(--font-pixel);
+            background: var(--color-noite);
+            color: var(--color-branco);
+            -webkit-font-smoothing: none;
+        }
+
+        /* Cursor a piscar: anda aos "saltos" com steps() */
+        .cursor {
+            display: inline-block;
+            width: 0.6em;
+            height: 1em;
+            vertical-align: -0.15em;
+            background: currentColor;
+            animation: piscar 1s steps(1) infinite;
+        }
+        @keyframes piscar {
+            50% { opacity: 0; }
+        }
+
+        /* =========================================================
+           ÍCONES DO AMBIENTE DE TRABALHO
+           ========================================================= */
+        .icone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            width: 112px;
+            padding: 8px;
+            cursor: pointer;
+        }
+        .icone img {
+            width: 64px;   /* 16 píxeis x 4 */
+            height: 64px;
+        }
+        .icone span {
+            padding: 0 6px;
+            font-size: 18px;
+            color: var(--color-branco);
+        }
+        /* hover: o ícone salta e a etiqueta fica selecionada */
+        .icone:hover img,
+        .icone:focus-visible img {
+            animation: saltar 0.6s steps(1) infinite;
+        }
+        .icone:hover span,
+        .icone:focus-visible span {
+            background: var(--color-ceu);
+        }
+        .icone:focus-visible {
+            outline: 2px dashed var(--color-branco);
+        }
+        /* clique: o ícone "afunda" 2px */
+        .icone:active {
+            transform: translateY(2px);
+        }
+        @keyframes saltar {
+            0%   { transform: translateY(0); }
+            33%  { transform: translateY(-6px); }
+            66%  { transform: translateY(-3px); }
+        }
+
+        /* =========================================================
+           JANELAS
+           ========================================================= */
+        .janela {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(640px, calc(100% - 32px));
+            max-height: calc(100vh - 56px - 48px);  /* não tapa a barra de tarefas */
+            display: flex;
+            flex-direction: column;
+            background: var(--color-branco);
+            color: var(--color-tinta);
+            border: 4px solid var(--color-tinta);
+            box-shadow: 8px 8px 0 var(--color-tinta);   /* sombra "dura" */
+            animation: abrir 0.15s steps(3);
+        }
+        .janela[hidden] {
+            display: none;
+        }
+        @keyframes abrir {
+            from { transform: translateX(-50%) scale(0.7); }
+            to   { transform: translateX(-50%) scale(1); }
+        }
+        .janela-titulo {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 6px 6px 12px;
+            background: var(--color-azul);
+            border-bottom: 4px solid var(--color-tinta);
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .janela-corpo {
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        /* impede que o conteúdo (ex.: a caixa do poema) seja "espremido" */
+        .janela-corpo > * {
+            flex-shrink: 0;
+        }
+        .fechar {
+            width: 28px;
+            height: 28px;
+            font-family: var(--font-barra);
+            font-size: 12px;
+            background: var(--color-branco);
+            border: 2px solid var(--color-tinta);
+            box-shadow: 2px 2px 0 var(--color-tinta);
+        }
+        .fechar:hover {
+            background: var(--color-coral);
+            color: var(--color-branco);
+        }
+        .fechar:active {
+            transform: translate(2px, 2px);
+            box-shadow: none;
+        }
+
+        /* =========================================================
+           BOTÕES, CAMPOS E CAIXAS DENTRO DAS JANELAS
+           ========================================================= */
+        .botao {
+            padding: 6px 14px;
+            font-weight: 600;
+            background: var(--color-pessego);
+            color: var(--color-tinta);
+            border: 2px solid var(--color-tinta);
+            box-shadow: 3px 3px 0 var(--color-tinta);
+            cursor: pointer;
+        }
+        .botao:hover {
+            background: var(--color-sol);
+        }
+        .botao:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0 var(--color-tinta);
+        }
+        .botao:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .botao-claro {
+            background: var(--color-branco);
+        }
+        .botao-pequeno {
+            padding: 2px 8px;
+            font-size: 14px;
+        }
+
+        .campo {
+            padding: 6px 10px;
+            background: var(--color-branco);
+            color: var(--color-tinta);
+            border: 2px solid var(--color-tinta);
+            font-family: inherit;
+        }
+        .campo:focus {
+            outline: 3px solid var(--color-ceu);
+        }
+        .campo:disabled {
+            opacity: 0.4;
+        }
+
+        /* caixas pequenas com números (estatísticas) */
+        .caixa {
+            padding: 6px;
+            background: var(--color-gelo);
+            border: 2px solid var(--color-tinta);
+            text-align: center;
+        }
+
+        /* amostras de cor da paleta (criadas pelo app.py) */
+        .amostra {
+            border: 2px solid var(--color-tinta);
+            box-shadow: 3px 3px 0 var(--color-tinta);
+        }
+        .amostra:hover {
+            transform: translateY(-4px);
+        }
+
+        input[type="color"] {
+            border: 2px solid var(--color-tinta);
+            padding: 2px;
+            background: var(--color-branco);
+        }
+        input[type="range"] {
+            accent-color: var(--color-coral);
+        }
+
+        /* caixas de seleção e opções quadradas, estilo pixel */
+        input[type="checkbox"],
+        input[type="radio"] {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            background: var(--color-branco);
+            border: 2px solid var(--color-tinta);
+            cursor: pointer;
+        }
+        input[type="checkbox"]:checked,
+        input[type="radio"]:checked {
+            background: var(--color-coral);
+            box-shadow: inset 0 0 0 3px var(--color-branco);
+        }
+
+        /* =========================================================
+           BARRA DE TAREFAS
+           ========================================================= */
+        .barra {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            height: 56px;
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            background: var(--color-gelo);
+            color: var(--color-tinta);
+            border-top: 4px solid var(--color-tinta);
+            font-family: var(--font-barra);
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .barra-zona {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 14px;
+            background: var(--color-azul);
+        }
+        .barra-zona img {
+            width: 32px;    /* 16 píxeis x 2 */
+            height: 32px;
+        }
+        #btn-definicoes {
+            border-right: 4px solid var(--color-tinta);
+            cursor: pointer;
+        }
+        #btn-definicoes:hover {
+            background: var(--color-sol);
+        }
+        #btn-definicoes:active {
+            padding-top: 4px;   /* "afunda" 2px */
+        }
+        .barra-data {
+            border-left: 4px solid var(--color-tinta);
+        }
+
+        /* =========================================================
+           LINHAS DE ECRÃ ANTIGO (CRT), ligadas nas definições
+           São riscas com corte seco, não um degradê suave.
+           ========================================================= */
+        .scanlines {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            pointer-events: none;   /* deixa clicar através das linhas */
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0 2px,
+                rgb(0 0 0 / 0.2) 2px 3px
+            );
+        }
+        body.com-scanlines .scanlines {
+            display: block;
+        }
+
+        /* =========================================================
+           TELEMÓVEL
+           ========================================================= */
+        @media (max-width: 640px) {
+            .janela {
+                top: 8px;
+                width: calc(100% - 16px);
+                max-height: calc(100vh - 56px - 24px);
+                box-shadow: 4px 4px 0 var(--color-tinta);
+            }
+            .icone {
+                width: 96px;
+            }
+            .barra {
+                font-size: 10px;
+            }
+            .barra-zona {
+                padding: 0 10px;
+                gap: 6px;
+            }
+        }
+    </style>
 </head>
 
-<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+<body class="min-h-screen">
 
-    <!-- Ecrã de carregamento (o app.py remove-o quando o Python estiver pronto) -->
-    <div id="loading" class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-slate-950">
-        <div class="h-12 w-12 animate-spin rounded-full border-4 border-violet-500 border-t-transparent"></div>
-        <p class="text-slate-300">A carregar o Python no browser...</p>
+    <!-- Ecrã de arranque (o app.py remove-o quando o Python estiver pronto) -->
+    <div id="loading" class="fixed inset-0 z-[3000] flex flex-col items-center justify-center gap-6 bg-noite text-branco">
+        <img src="Assets/icons/ecra.svg" alt="" class="h-16 w-16">
+        <p class="text-xl">a arrancar o python<span class="cursor ml-1"></span></p>
     </div>
 
-    <header class="border-b border-slate-800 bg-gradient-to-br from-violet-900/40 via-slate-950 to-sky-900/30">
-        <div class="mx-auto max-w-7xl px-4 py-10 text-center">
-            <p class="text-sm font-semibold uppercase tracking-widest text-violet-400">Oficina de Multimédia · 12.º ano</p>
-            <h1 class="mt-2 text-3xl font-bold sm:text-5xl">Dashboard Multimédia com IA</h1>
-            <p class="mx-auto mt-3 max-w-2xl text-slate-400">
-                Aplicações Python integradas na Web com PyScript, ampliadas com Inteligência Artificial.
-            </p>
+    <!-- =========================================================
+         AMBIENTE DE TRABALHO
+         Para adicionar uma app nova: copia um <button class="icone">
+         e muda o data-abrir, a imagem e a etiqueta.
+         ========================================================= -->
+    <main class="px-4 pt-10 pb-24">
+        <p class="mb-12 text-center text-lg text-gelo">
+            &gt; dashboard multimédia com ia<span class="cursor ml-1"></span>
+        </p>
+
+        <nav class="mx-auto flex max-w-3xl flex-wrap justify-center gap-6">
+            <button class="icone" data-abrir="janela-poema">
+                <img src="Assets/icons/poema.svg" alt="">
+                <span>poema</span>
+            </button>
+            <button class="icone" data-abrir="janela-ecra">
+                <img src="Assets/icons/ecra.svg" alt="">
+                <span>ecrã</span>
+            </button>
+            <button class="icone" data-abrir="janela-adivinha">
+                <img src="Assets/icons/adivinha.svg" alt="">
+                <span>adivinha</span>
+            </button>
+            <button class="icone" data-abrir="janela-sobre">
+                <img src="Assets/icons/sobre.svg" alt="">
+                <span>sobre</span>
+            </button>
+        </nav>
+    </main>
+
+    <!-- ============ JANELA 1 - Analisador Poético ============ -->
+    <section id="janela-poema" class="janela" hidden>
+        <div class="janela-titulo">
+            <span>poema.py · analisador poético</span>
+            <button class="fechar" data-fechar aria-label="Fechar">x</button>
         </div>
-    </header>
+        <div class="janela-corpo">
+            <p class="text-tinta/70">Conta palavras, gera uma nuvem e sugere sinónimos.</p>
 
-    <main class="mx-auto grid max-w-7xl gap-6 px-4 py-8 lg:grid-cols-2 xl:grid-cols-3">
-
-        <!-- ============ WIDGET 1 - Analisador Poético ============ -->
-        <section class="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-            <div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-violet-400">Widget 1</span>
-                <h2 class="text-xl font-bold">✒️ Analisador Poético</h2>
-                <p class="text-sm text-slate-400">Conta palavras, gera uma nuvem e sugere sinónimos.</p>
-            </div>
-
-            <textarea id="poema" rows="5"
-                class="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm focus:border-violet-500 focus:outline-none">O esforço é grande e o homem é pequeno.
+            <textarea id="poema" rows="5" class="campo w-full">O esforço é grande e o homem é pequeno.
 Eu, Diogo Cão, navegador, deixei
 Este padrão ao pé do areal moreno
 E para diante naveguei.</textarea>
 
-            <div class="flex flex-wrap items-center gap-3 text-sm">
-                <button id="btn-analisar"
-                    class="rounded-lg bg-violet-600 px-4 py-2 font-semibold hover:bg-violet-500">Analisar</button>
-                <label class="flex items-center gap-2 text-slate-400">Paleta
-                    <select id="nuvem-paleta" class="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-slate-100">
+            <div class="flex flex-wrap items-center gap-3">
+                <button id="btn-analisar" class="botao">Analisar</button>
+                <label class="flex items-center gap-2">Paleta
+                    <select id="nuvem-paleta" class="campo py-1">
                         <option value="viridis">Viridis</option>
                         <option value="oceano">Oceano</option>
                         <option value="fogo">Fogo</option>
                         <option value="pastel">Pastel</option>
                     </select>
                 </label>
-                <label class="flex items-center gap-2 text-slate-400">Máx.
-                    <input id="nuvem-max" type="range" min="5" max="60" value="30" class="w-20 accent-violet-500">
+                <label class="flex items-center gap-2">Máx.
+                    <input id="nuvem-max" type="range" min="5" max="60" value="30" class="w-20">
                 </label>
             </div>
 
-            <div class="grid grid-cols-4 gap-2 text-center">
-                <div class="rounded-lg bg-slate-950 p-2"><p id="stat-palavras" class="text-lg font-bold">0</p><p class="text-xs text-slate-400">palavras</p></div>
-                <div class="rounded-lg bg-slate-950 p-2"><p id="stat-versos" class="text-lg font-bold">0</p><p class="text-xs text-slate-400">versos</p></div>
-                <div class="rounded-lg bg-slate-950 p-2"><p id="stat-unicas" class="text-lg font-bold">0</p><p class="text-xs text-slate-400">únicas</p></div>
-                <div class="rounded-lg bg-slate-950 p-2"><p id="stat-top" class="truncate text-lg font-bold">-</p><p class="text-xs text-slate-400">mais usada</p></div>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div class="caixa"><p id="stat-palavras" class="text-xl font-semibold">0</p><p class="text-sm">palavras</p></div>
+                <div class="caixa"><p id="stat-versos" class="text-xl font-semibold">0</p><p class="text-sm">versos</p></div>
+                <div class="caixa"><p id="stat-unicas" class="text-xl font-semibold">0</p><p class="text-sm">únicas</p></div>
+                <div class="caixa"><p id="stat-top" class="truncate text-xl font-semibold">-</p><p class="text-sm">mais usada</p></div>
             </div>
 
-            <div id="nuvem" class="flex min-h-40 flex-wrap items-center justify-center rounded-lg bg-white p-4 text-center leading-tight"></div>
+            <div id="nuvem" class="flex min-h-40 flex-wrap items-center justify-center border-2 border-tinta bg-branco p-4 text-center leading-tight"></div>
 
             <div>
-                <h3 class="mb-1 text-sm font-semibold text-slate-300">Sinónimos poéticos</h3>
-                <ul id="sinonimos" class="space-y-1 text-sm text-slate-300"></ul>
-                <button id="btn-reescrever"
-                    class="mt-3 rounded-lg border border-violet-500 px-3 py-1.5 text-sm text-violet-300 hover:bg-violet-500/10">Reescrever com sinónimos</button>
-                <p id="poema-novo" class="mt-2 whitespace-pre-line text-sm italic text-slate-300"></p>
+                <h3 class="mb-1 font-semibold">Sinónimos poéticos</h3>
+                <ul id="sinonimos" class="space-y-1"></ul>
+                <button id="btn-reescrever" class="botao botao-claro mt-3">Reescrever com sinónimos</button>
+                <p id="poema-novo" class="mt-2 whitespace-pre-line italic"></p>
             </div>
-        </section>
+        </div>
+    </section>
 
-        <!-- ============ WIDGET 2 - Validador Multimédia ============ -->
-        <section class="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-            <div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-sky-400">Widget 2</span>
-                <h2 class="text-xl font-bold">🖥️ Validador Multimédia</h2>
-                <p class="text-sm text-slate-400">Resolução, proporção do ecrã e paleta de cores.</p>
-            </div>
+    <!-- ============ JANELA 2 - Validador Multimédia ============ -->
+    <section id="janela-ecra" class="janela" hidden>
+        <div class="janela-titulo">
+            <span>ecra.py · validador multimédia</span>
+            <button class="fechar" data-fechar aria-label="Fechar">x</button>
+        </div>
+        <div class="janela-corpo">
+            <p class="text-tinta/70">Resolução, proporção do ecrã e paleta de cores.</p>
 
             <div class="flex flex-wrap gap-2">
-                <button data-preset="1280x720" class="rounded-md bg-slate-800 px-2.5 py-1 text-xs hover:bg-slate-700">HD</button>
-                <button data-preset="1920x1080" class="rounded-md bg-slate-800 px-2.5 py-1 text-xs hover:bg-slate-700">Full HD</button>
-                <button data-preset="3840x2160" class="rounded-md bg-slate-800 px-2.5 py-1 text-xs hover:bg-slate-700">4K</button>
-                <button data-preset="1024x768" class="rounded-md bg-slate-800 px-2.5 py-1 text-xs hover:bg-slate-700">4:3</button>
-                <button data-preset="1080x1080" class="rounded-md bg-slate-800 px-2.5 py-1 text-xs hover:bg-slate-700">Instagram</button>
-                <button data-preset="1080x1920" class="rounded-md bg-slate-800 px-2.5 py-1 text-xs hover:bg-slate-700">Stories</button>
+                <button data-preset="1280x720" class="botao botao-claro botao-pequeno">HD</button>
+                <button data-preset="1920x1080" class="botao botao-claro botao-pequeno">Full HD</button>
+                <button data-preset="3840x2160" class="botao botao-claro botao-pequeno">4K</button>
+                <button data-preset="1024x768" class="botao botao-claro botao-pequeno">4:3</button>
+                <button data-preset="1080x1080" class="botao botao-claro botao-pequeno">Instagram</button>
+                <button data-preset="1080x1920" class="botao botao-claro botao-pequeno">Stories</button>
             </div>
 
             <div class="flex items-end gap-2">
-                <label class="flex-1 text-xs text-slate-400">Largura (px)
-                    <input id="res-largura" type="number" min="1"
-                        class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none">
+                <label class="flex-1 text-sm">Largura (px)
+                    <input id="res-largura" type="number" min="1" class="campo mt-1 w-full">
                 </label>
-                <span class="pb-2 text-slate-500">×</span>
-                <label class="flex-1 text-xs text-slate-400">Altura (px)
-                    <input id="res-altura" type="number" min="1"
-                        class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none">
+                <span class="pb-2">×</span>
+                <label class="flex-1 text-sm">Altura (px)
+                    <input id="res-altura" type="number" min="1" class="campo mt-1 w-full">
                 </label>
-                <button id="btn-validar" class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold hover:bg-sky-500">Validar</button>
+                <button id="btn-validar" class="botao">Validar</button>
             </div>
 
-            <div class="grid grid-cols-2 items-center gap-4">
+            <div class="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
                 <div id="res-resultado"></div>
                 <div class="flex h-36 items-center justify-center">
                     <div id="res-preview"
-                        class="flex max-h-full max-w-full items-center justify-center rounded-md border-2 border-dashed border-sky-500 bg-sky-500/10 font-mono text-xs text-sky-300"
+                        class="flex max-h-full max-w-full items-center justify-center border-2 border-dashed border-tinta bg-gelo text-sm"
                         style="width: 100%; aspect-ratio: 16 / 9;"></div>
                 </div>
             </div>
 
-            <hr class="border-slate-800">
+            <hr class="border-t-2 border-dashed border-tinta">
 
             <div>
                 <div class="mb-2 flex items-center justify-between">
-                    <h3 class="text-sm font-semibold text-slate-300">🎨 Paleta de cores (Hex)</h3>
-                    <input id="cor-base" type="color" value="#7c3aed" class="h-8 w-14 cursor-pointer rounded bg-transparent">
+                    <h3 class="font-semibold">Paleta de cores (Hex)</h3>
+                    <input id="cor-base" type="color" value="#e8533f" class="h-9 w-14 cursor-pointer">
                 </div>
-                <div id="paleta" class="grid grid-cols-3 gap-2"></div>
-                <p id="cor-aviso" class="mt-2 h-5 text-xs text-slate-400">Clica numa cor para copiar o código.</p>
+                <div id="paleta" class="grid grid-cols-2 gap-3 sm:grid-cols-3"></div>
+                <p id="cor-aviso" class="mt-3 h-5 text-sm text-tinta/70">Clica numa cor para copiar o código.</p>
             </div>
-        </section>
+        </div>
+    </section>
 
-        <!-- ============ WIDGET 3 - Adivinha o Número ============ -->
-        <section class="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl lg:col-span-2 xl:col-span-1">
-            <div>
-                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400">Widget 3</span>
-                <h2 class="text-xl font-bold">🎯 Adivinha o Número</h2>
-                <p class="text-sm text-slate-400">Com dicas inteligentes e mensagens motivacionais.</p>
-            </div>
+    <!-- ============ JANELA 3 - Adivinha o Número ============ -->
+    <section id="janela-adivinha" class="janela" hidden>
+        <div class="janela-titulo">
+            <span>adivinha.py · adivinha o número</span>
+            <button class="fechar" data-fechar aria-label="Fechar">x</button>
+        </div>
+        <div class="janela-corpo">
+            <p class="text-tinta/70">Com dicas inteligentes e mensagens motivacionais.</p>
 
             <div class="flex flex-wrap items-center gap-2">
-                <select id="jogo-nivel" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+                <select id="jogo-nivel" class="campo">
                     <option value="1">Fácil (20 tentativas)</option>
                     <option value="2" selected>Médio (10 tentativas)</option>
                     <option value="3">Difícil (5 tentativas)</option>
                 </select>
-                <button id="btn-comecar" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-500">Novo jogo</button>
+                <button id="btn-comecar" class="botao">Novo jogo</button>
             </div>
 
             <div class="flex gap-2">
                 <input id="jogo-chute" type="number" min="1" max="100" placeholder="1 a 100" disabled
-                    class="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none disabled:opacity-40">
-                <button id="btn-tentar" disabled
-                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-white disabled:opacity-40">Tentar</button>
+                    class="campo min-w-0 flex-1">
+                <button id="btn-tentar" class="botao botao-claro" disabled>Tentar</button>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 text-center">
-                <div class="rounded-lg bg-slate-950 p-2"><p id="jogo-restantes" class="text-lg font-bold">-</p><p class="text-xs text-slate-400">tentativas restantes</p></div>
-                <div class="rounded-lg bg-slate-950 p-2"><p id="jogo-intervalo" class="text-lg font-bold">1 – 100</p><p class="text-xs text-slate-400">o número está entre</p></div>
+            <div class="grid grid-cols-2 gap-2">
+                <div class="caixa"><p id="jogo-restantes" class="text-xl font-semibold">-</p><p class="text-sm">tentativas restantes</p></div>
+                <div class="caixa"><p id="jogo-intervalo" class="text-xl font-semibold">1 – 100</p><p class="text-sm">o número está entre</p></div>
             </div>
 
-            <div class="h-2 overflow-hidden rounded-full bg-slate-800">
-                <div id="jogo-barra" class="h-full bg-emerald-500 transition-all" style="width: 0%"></div>
+            <!-- barra de tentativas restantes -->
+            <div class="h-5 border-2 border-tinta bg-gelo">
+                <div id="jogo-barra" class="h-full bg-coral" style="width: 0%"></div>
             </div>
 
-            <p id="jogo-mensagem" class="min-h-12 text-sm text-slate-400">Escolhe a dificuldade e carrega em "Novo jogo".</p>
+            <p id="jogo-mensagem" class="min-h-12">Escolhe a dificuldade e carrega em "Novo jogo".</p>
 
             <div id="jogo-historico" class="flex flex-wrap gap-1.5"></div>
-        </section>
-    </main>
+        </div>
+    </section>
 
-    <footer class="py-6 text-center text-xs text-slate-500">
-        Rafael Opitz · A3 · Colégio Rainha Santa Isabel · 2026/2027
+    <!-- ============ JANELA 4 - Sobre ============ -->
+    <section id="janela-sobre" class="janela" hidden>
+        <div class="janela-titulo">
+            <span>sobre.txt</span>
+            <button class="fechar" data-fechar aria-label="Fechar">x</button>
+        </div>
+        <div class="janela-corpo">
+            <p class="text-sm font-semibold uppercase text-coral">Oficina de Multimédia · 12.º ano</p>
+            <h1 class="text-2xl font-semibold">Dashboard Multimédia com IA</h1>
+            <p>Aplicações Python integradas na Web com PyScript, ampliadas com Inteligência Artificial.</p>
+            <p>Clica num ícone do ambiente de trabalho para abrir uma aplicação.</p>
+            <p class="border-t-2 border-dashed border-tinta pt-3 text-sm text-tinta/70">
+                Rafael Opitz · A3 · Colégio Rainha Santa Isabel · 2026/2027
+            </p>
+        </div>
+    </section>
+
+    <!-- ============ JANELA - Definições ============ -->
+    <section id="janela-definicoes" class="janela" hidden>
+        <div class="janela-titulo">
+            <span>definições</span>
+            <button class="fechar" data-fechar aria-label="Fechar">x</button>
+        </div>
+        <div class="janela-corpo">
+            <label class="flex cursor-pointer items-center gap-3">
+                <input id="opcao-scanlines" type="checkbox"> Linhas de ecrã antigo (CRT)
+            </label>
+            <label class="flex cursor-pointer items-center gap-3">
+                <input id="opcao-som" type="checkbox"> Som ao clicar
+            </label>
+            <fieldset class="flex flex-col gap-2">
+                <legend class="mb-2 font-semibold">Tema</legend>
+                <label class="flex cursor-pointer items-center gap-3">
+                    <input type="radio" name="tema" value="noite"> Noite
+                </label>
+                <label class="flex cursor-pointer items-center gap-3">
+                    <input type="radio" name="tema" value="por-do-sol"> Pôr do sol
+                </label>
+            </fieldset>
+        </div>
+    </section>
+
+    <!-- =========================================================
+         BARRA DE TAREFAS
+         ========================================================= -->
+    <footer class="barra">
+        <button id="btn-definicoes" class="barra-zona" data-abrir="janela-definicoes">DEFINIÇÕES</button>
+        <div class="barra-zona barra-data">
+            <img id="icone-tempo" src="Assets/icons/sol.svg" alt="">
+            <span id="data-hoje">---.--</span>
+        </div>
     </footer>
+
+    <!-- camada das linhas CRT (por cima de tudo, mas não bloqueia cliques) -->
+    <div class="scanlines"></div>
+
+    <!-- =========================================================
+         JAVASCRIPT DA INTERFACE
+         Só trata do "sistema operativo" (janelas, relógio, definições).
+         A lógica das aplicações continua toda no app.py.
+         ========================================================= -->
+    <script>
+        // ---------- Janelas ----------
+        let camadaTopo = 10;   // z-index da janela que está à frente
+
+        function abrirJanela(id) {
+            const janela = document.getElementById(id);
+            janela.hidden = false;
+            trazerParaFrente(janela);
+        }
+
+        function fecharJanela(janela) {
+            janela.hidden = true;
+        }
+
+        function trazerParaFrente(janela) {
+            camadaTopo = camadaTopo + 1;
+            janela.style.zIndex = camadaTopo;
+        }
+
+        // botões com data-abrir="id-da-janela" (ícones e botão Definições)
+        for (const botao of document.querySelectorAll("[data-abrir]")) {
+            botao.addEventListener("click", function () {
+                abrirJanela(botao.dataset.abrir);
+            });
+        }
+
+        // botões [x] de fechar
+        for (const botao of document.querySelectorAll("[data-fechar]")) {
+            botao.addEventListener("click", function () {
+                fecharJanela(botao.closest(".janela"));
+            });
+        }
+
+        // clicar numa janela põe-na à frente das outras
+        for (const janela of document.querySelectorAll(".janela")) {
+            janela.addEventListener("mousedown", function () {
+                trazerParaFrente(janela);
+            });
+        }
+
+        // a tecla Esc fecha a janela que está à frente
+        document.addEventListener("keydown", function (evento) {
+            if (evento.key !== "Escape") return;
+            let daFrente = null;
+            for (const janela of document.querySelectorAll(".janela:not([hidden])")) {
+                if (daFrente === null || Number(janela.style.zIndex) > Number(daFrente.style.zIndex)) {
+                    daFrente = janela;
+                }
+            }
+            if (daFrente) fecharJanela(daFrente);
+        });
+
+        // ---------- Relógio da barra de tarefas ----------
+        const DIAS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+
+        function atualizarData() {
+            const agora = new Date();
+            const dia = String(agora.getDate()).padStart(2, "0");   // 5 -> "05"
+            document.getElementById("data-hoje").textContent = DIAS[agora.getDay()] + "." + dia;
+
+            // sol durante o dia, lua à noite
+            const hora = agora.getHours();
+            const icone = (hora >= 7 && hora < 20) ? "sol" : "lua";
+            document.getElementById("icone-tempo").src = "Assets/icons/" + icone + ".svg";
+        }
+        atualizarData();
+        setInterval(atualizarData, 30000);   // volta a verificar a cada 30 segundos
+
+        // ---------- Definições (guardadas no localStorage) ----------
+        const PADRAO = { scanlines: false, som: false, tema: "noite" };
+        let definicoes = carregarDefinicoes();
+
+        function carregarDefinicoes() {
+            try {
+                const guardado = JSON.parse(localStorage.getItem("definicoes"));
+                return Object.assign({}, PADRAO, guardado);
+            } catch (erro) {
+                return Object.assign({}, PADRAO);   // se não der para ler, usa o padrão
+            }
+        }
+
+        function guardarDefinicoes() {
+            try {
+                localStorage.setItem("definicoes", JSON.stringify(definicoes));
+            } catch (erro) {
+                // modo privado, etc.: as definições só duram até fechar a página
+            }
+        }
+
+        function aplicarDefinicoes() {
+            document.body.classList.toggle("com-scanlines", definicoes.scanlines);
+            document.documentElement.dataset.tema = definicoes.tema;
+
+            // mostra o estado certo nos controlos da janela Definições
+            document.getElementById("opcao-scanlines").checked = definicoes.scanlines;
+            document.getElementById("opcao-som").checked = definicoes.som;
+            for (const radio of document.querySelectorAll('input[name="tema"]')) {
+                radio.checked = (radio.value === definicoes.tema);
+            }
+        }
+
+        document.getElementById("opcao-scanlines").addEventListener("change", function (evento) {
+            definicoes.scanlines = evento.target.checked;
+            guardarDefinicoes();
+            aplicarDefinicoes();
+        });
+
+        document.getElementById("opcao-som").addEventListener("change", function (evento) {
+            definicoes.som = evento.target.checked;
+            guardarDefinicoes();
+        });
+
+        for (const radio of document.querySelectorAll('input[name="tema"]')) {
+            radio.addEventListener("change", function () {
+                definicoes.tema = radio.value;
+                guardarDefinicoes();
+                aplicarDefinicoes();
+            });
+        }
+
+        aplicarDefinicoes();
+
+        // ---------- Som de clique (gerado pelo browser, sem ficheiros) ----------
+        let audio = null;
+
+        function tocarClique() {
+            if (!definicoes.som) return;
+            if (audio === null) audio = new AudioContext();
+
+            const oscilador = audio.createOscillator();   // gera o som
+            const volume = audio.createGain();            // controla o volume
+            oscilador.type = "square";                    // onda quadrada = som de 8 bits
+            oscilador.frequency.value = 660;
+            volume.gain.value = 0.05;
+
+            oscilador.connect(volume);
+            volume.connect(audio.destination);
+            oscilador.start();
+            oscilador.stop(audio.currentTime + 0.04);     // dura 40 milissegundos
+        }
+
+        // qualquer clique num botão faz "bip"
+        document.addEventListener("click", function (evento) {
+            if (evento.target.closest("button")) tocarClique();
+        });
+    </script>
 
     <script type="py" src="./app.py"></script>
 </body>
