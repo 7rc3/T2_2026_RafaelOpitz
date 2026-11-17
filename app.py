@@ -2,10 +2,11 @@
 # Baseado nas fichas de Python de outubro (old/python.ipynb e old/parte2.ipynb)
 
 import random
+import time
 from html import escape
-from math import gcd
 
 from pyscript import document, when, window
+from pyscript.ffi import create_proxy
 
 
 def el(id):
@@ -165,154 +166,356 @@ def reescrever_poema(event):
 
 
 # =====================================================================
-# WIDGET 2 - Validador de Resoluções, Proporções e Cores
-# Baseado no exercício 1.3.1 (resolução do ecrã) da parte 2
+# WIDGET 2 - Campo Minado
+# Usa listas dentro de listas (uma "grelha"), ciclos for/while e if/elif/else
 # =====================================================================
 
-PROPORCOES = {
-    "16:9": 16 / 9,
-    "4:3": 4 / 3,
-    "1:1": 1,
-    "21:9": 21 / 9,
-    "9:16": 9 / 16,
-    "3:2": 3 / 2,
-    "4:5": 4 / 5,
+# nível: (linhas, colunas, minas)
+NIVEIS_MINAS = {
+    "1": (8, 8, 10),
+    "2": (10, 10, 16),
+    "3": (12, 12, 28),
+}
+
+# cor de cada número: 1 = azul, 2 = escuro, 3 ou mais = vermelho
+CORES_NUMEROS = {1: "text-ceu", 2: "text-tinta"}
+
+campo = {
+    "linhas": 0,
+    "colunas": 0,
+    "total_minas": 0,
+    "minas": [],        # grelha com True onde há mina
+    "estado": [],       # grelha com "fechada", "aberta" ou "bandeira"
+    "primeiro": True,   # as minas só são postas depois do 1.º clique
+    "ativo": False,
+    "inicio": 0,        # hora do 1.º clique (para o cronómetro)
+    "explodiu": None,   # casa onde o jogador perdeu
+    "dica": None,       # casa que a dica está a mostrar
 }
 
 
-def categoria_resolucao(largura):
-    if largura < 1280:
-        return "SD (baixa resolução)", "bg-coral text-branco"
-    elif largura < 1920:
-        return "HD (720p)", "bg-pessego text-tinta"
-    elif largura < 2560:
-        return "Full HD (1080p)", "bg-sol text-tinta"
-    elif largura < 3840:
-        return "2K / QHD", "bg-azul text-tinta"
-    else:
-        return "4K UHD ou superior", "bg-ceu text-branco"
+def criar_grelha(valor):
+    # lista de linhas, cada linha é uma lista de casas
+    grelha = []
+    for l in range(campo["linhas"]):
+        grelha.append([valor] * campo["colunas"])
+    return grelha
 
 
-@when("click", "#btn-validar")
-def clicar_validar(event):
-    validar_resolucao()
+def vizinhos(l, c):
+    # devolve as casas à volta de (l, c): até 8, menos nos cantos e bordas
+    lista = []
+    for dl in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            nl = l + dl
+            nc = c + dc
+            if dl == 0 and dc == 0:
+                continue  # é a própria casa
+            if 0 <= nl < campo["linhas"] and 0 <= nc < campo["colunas"]:
+                lista.append((nl, nc))
+    return lista
 
 
-def validar_resolucao():
-    try:
-        largura = int(el("res-largura").value)
-        altura = int(el("res-altura").value)
-    except ValueError:
-        el("res-resultado").innerHTML = '<p class="font-semibold text-coral">Introduz números inteiros válidos.</p>'
+def contar_minas_perto(l, c):
+    total = 0
+    for nl, nc in vizinhos(l, c):
+        if campo["minas"][nl][nc]:
+            total += 1
+    return total
+
+
+def colocar_minas(l, c):
+    # a casa do 1.º clique e as vizinhas ficam sempre sem minas
+    proibidas = vizinhos(l, c) + [(l, c)]
+    livres = []
+    for nl in range(campo["linhas"]):
+        for nc in range(campo["colunas"]):
+            if (nl, nc) not in proibidas:
+                livres.append((nl, nc))
+    for ml, mc in random.sample(livres, campo["total_minas"]):
+        campo["minas"][ml][mc] = True
+
+
+def mensagem_minas(texto, cor="text-tinta"):
+    el("minas-mensagem").className = f"min-h-12 {cor}"
+    el("minas-mensagem").innerHTML = texto
+
+
+def novo_campo():
+    linhas, colunas, total = NIVEIS_MINAS[el("minas-nivel").value]
+    campo["linhas"] = linhas
+    campo["colunas"] = colunas
+    campo["total_minas"] = total
+    campo["minas"] = criar_grelha(False)
+    campo["estado"] = criar_grelha("fechada")
+    campo["primeiro"] = True
+    campo["ativo"] = True
+    campo["explodiu"] = None
+    campo["dica"] = None
+
+    el("minas-tempo").innerText = "0"
+    el("minas-tabuleiro").style.gridTemplateColumns = f"repeat({colunas}, minmax(0, 1fr))"
+    mensagem_minas("Clica numa casa para começar. O primeiro clique é sempre seguro! 🍀")
+    desenhar_campo()
+
+
+@when("click", "#btn-minas-novo")
+def clicar_novo_campo(event):
+    novo_campo()
+
+
+@when("change", "#minas-nivel")
+def mudar_nivel(event):
+    novo_campo()
+
+
+def abrir_casa(l, c):
+    if not campo["ativo"] or campo["estado"][l][c] != "fechada":
         return
 
-    if largura <= 0 or altura <= 0:
-        el("res-resultado").innerHTML = '<p class="font-semibold text-coral">Por favor introduz uma resolução válida.</p>'
+    if campo["primeiro"]:
+        colocar_minas(l, c)
+        campo["primeiro"] = False
+        campo["inicio"] = time.time()
+
+    if campo["minas"][l][c]:
+        perder(l, c)
         return
 
-    categoria, cores = categoria_resolucao(max(largura, altura))
+    # abre a casa; se não tiver minas à volta, abre também as vizinhas
+    # (a "pilha" guarda as casas que ainda faltam abrir)
+    pilha = [(l, c)]
+    while pilha:
+        al, ac = pilha.pop()
+        if campo["estado"][al][ac] != "fechada":
+            continue
+        campo["estado"][al][ac] = "aberta"
+        if contar_minas_perto(al, ac) == 0:
+            for vizinha in vizinhos(al, ac):
+                pilha.append(vizinha)
 
-    # proporção exata usando o máximo divisor comum
-    divisor = gcd(largura, altura)
-    exata = f"{largura // divisor}:{altura // divisor}"
 
-    # proporção conhecida mais próxima
-    racio = largura / altura
-    nome_proximo = min(PROPORCOES, key=lambda nome: abs(PROPORCOES[nome] - racio))
-    if abs(PROPORCOES[nome_proximo] - racio) < 0.02:
-        proporcao = nome_proximo
+def abrir_a_volta(l, c):
+    # clicar num número já aberto: se já tem as bandeiras todas, abre o resto
+    bandeiras = 0
+    for nl, nc in vizinhos(l, c):
+        if campo["estado"][nl][nc] == "bandeira":
+            bandeiras += 1
+    if bandeiras == contar_minas_perto(l, c):
+        for nl, nc in vizinhos(l, c):
+            abrir_casa(nl, nc)
+
+
+def jogar(l, c):
+    if not campo["ativo"]:
+        return
+    campo["dica"] = None
+    if campo["estado"][l][c] == "aberta":
+        abrir_a_volta(l, c)
     else:
-        proporcao = f"{exata} (perto de {nome_proximo})"
+        abrir_casa(l, c)
 
-    megapixeis = largura * altura / 1_000_000
-
-    el("res-resultado").innerHTML = f"""
-        <span class="inline-block border-2 border-tinta px-3 py-1 text-sm font-semibold {cores}">{categoria}</span>
-        <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <dt class="text-tinta/60">Proporção</dt><dd class="font-semibold">{proporcao}</dd>
-            <dt class="text-tinta/60">Megapíxeis</dt><dd class="font-semibold">{megapixeis:.2f} MP</dd>
-            <dt class="text-tinta/60">Total de píxeis</dt><dd class="font-semibold">{largura * altura:,}</dd>
-        </dl>
-    """
-
-    # pré-visualização com a proporção certa
-    preview = el("res-preview")
-    preview.style.aspectRatio = f"{largura} / {altura}"
-    preview.innerText = f"{largura}×{altura}"
+    if campo["ativo"] and ganhou():
+        vencer()
+    desenhar_campo()
 
 
-def usar_preset(largura, altura):
-    el("res-largura").value = str(largura)
-    el("res-altura").value = str(altura)
-    validar_resolucao()
+def marcar_bandeira(l, c):
+    if not campo["ativo"]:
+        return
+    if campo["estado"][l][c] == "fechada":
+        campo["estado"][l][c] = "bandeira"
+    elif campo["estado"][l][c] == "bandeira":
+        campo["estado"][l][c] = "fechada"
+    campo["dica"] = None
+    desenhar_campo()
 
 
-@when("click", "[data-preset]")
-def clicar_preset(event):
-    largura, altura = event.currentTarget.dataset.preset.split("x")
-    usar_preset(int(largura), int(altura))
+def ganhou():
+    # ganha quando todas as casas sem mina estão abertas
+    if campo["primeiro"]:
+        return False
+    for l in range(campo["linhas"]):
+        for c in range(campo["colunas"]):
+            if not campo["minas"][l][c] and campo["estado"][l][c] != "aberta":
+                return False
+    return True
 
 
-def hex_para_rgb(cor):
-    return int(cor[1:3], 16), int(cor[3:5], 16), int(cor[5:7], 16)
+def vencer():
+    campo["ativo"] = False
+    segundos = int(time.time() - campo["inicio"])
+    el("minas-tempo").innerText = str(segundos)
 
+    # põe bandeiras em todas as minas
+    for l in range(campo["linhas"]):
+        for c in range(campo["colunas"]):
+            if campo["minas"][l][c]:
+                campo["estado"][l][c] = "bandeira"
 
-def rgb_para_hex(r, g, b):
-    return f"#{int(r):02x}{int(g):02x}{int(b):02x}"
-
-
-def misturar(cor, outra, quantidade):
-    # mistura duas cores (quantidade de 0 a 1)
-    r1, g1, b1 = hex_para_rgb(cor)
-    r2, g2, b2 = hex_para_rgb(outra)
-    return rgb_para_hex(
-        r1 + (r2 - r1) * quantidade,
-        g1 + (g2 - g1) * quantidade,
-        b1 + (b2 - b1) * quantidade,
+    if segundos < 30:
+        elogio = "Velocidade de profissional! 🏆"
+    elif segundos < 90:
+        elogio = "Muito bem jogado! 🎉"
+    else:
+        elogio = "Com calma e paciência também se ganha! 🐢"
+    mensagem_minas(
+        f"<b>Campo limpo!</b> Demoraste {segundos} segundos. {elogio}",
+        "border-2 border-tinta bg-sol p-2",
     )
 
 
-@when("input", "#cor-base")
-def mudar_cor(event):
-    gerar_paleta()
+def perder(l, c):
+    campo["ativo"] = False
+    campo["explodiu"] = (l, c)
+    frase = random.choice([
+        "Tão perto... para a próxima corre melhor! 🔁",
+        "As minas não perdoam. Tenta outra vez! 💪",
+        "Respira fundo e começa outro campo! 😅",
+    ])
+    mensagem_minas(
+        f"<b>BOOM! 💥</b> Pisaste uma mina. {frase}",
+        "border-2 border-tinta bg-coral p-2 text-branco",
+    )
 
 
-def gerar_paleta():
-    base = el("cor-base").value
-    r, g, b = hex_para_rgb(base)
-    complementar = rgb_para_hex(255 - r, 255 - g, 255 - b)
+def desenhar_casa(l, c):
+    estado = campo["estado"][l][c]
+    mina = campo["minas"][l][c]
+    posicao = f'data-celula="{l}-{c}"'
+    img_mina = '<img src="Assets/icons/mina.svg" alt="mina">'
+    img_bandeira = '<img src="Assets/icons/bandeira.svg" alt="bandeira">'
 
-    paleta = [
-        ("Escura", misturar(base, "#000000", 0.6)),
-        ("Sombra", misturar(base, "#000000", 0.3)),
-        ("Base", base),
-        ("Clara", misturar(base, "#ffffff", 0.4)),
-        ("Suave", misturar(base, "#ffffff", 0.75)),
-        ("Complementar", complementar),
-    ]
+    # depois de perder: mostra as minas e as bandeiras erradas
+    if campo["explodiu"] is not None:
+        if campo["explodiu"] == (l, c):
+            return f'<div class="celula bg-coral">{img_mina}</div>'
+        if mina and estado != "bandeira":
+            return f'<div class="celula">{img_mina}</div>'
+        if estado == "bandeira" and not mina:
+            return '<div class="celula text-coral" title="bandeira errada">X</div>'
 
+    if estado == "fechada":
+        extra = " celula-dica" if campo["dica"] == (l, c) else ""
+        return f'<button {posicao} class="celula celula-fechada{extra}" aria-label="casa fechada"></button>'
+    if estado == "bandeira":
+        return f'<button {posicao} class="celula celula-fechada">{img_bandeira}</button>'
+
+    # casa aberta: mostra quantas minas tem à volta (nada se for 0)
+    numero = contar_minas_perto(l, c)
+    if numero == 0:
+        return '<div class="celula"></div>'
+    cor = CORES_NUMEROS.get(numero, "text-coral")
+    return f'<button {posicao} class="celula {cor}">{numero}</button>'
+
+
+def desenhar_campo():
     html = ""
-    for nome, cor in paleta:
-        # texto escuro em cores claras e texto claro em cores escuras
-        cr, cg, cb = hex_para_rgb(cor)
-        texto = "#1b1926" if (cr * 0.299 + cg * 0.587 + cb * 0.114) > 150 else "#ffffff"
-        html += f"""
-            <button data-cor="{cor}" title="Copiar {cor}"
-                class="amostra flex h-20 flex-col justify-end p-2 text-left text-sm"
-                style="background:{cor}; color:{texto}">
-                <span class="font-semibold">{nome}</span>
-                <span>{cor}</span>
-            </button>"""
-    el("paleta").innerHTML = html
-
-    for botao in document.querySelectorAll("[data-cor]"):
-        botao.onclick = copiar_cor
+    for l in range(campo["linhas"]):
+        for c in range(campo["colunas"]):
+            html += desenhar_casa(l, c)
+    el("minas-tabuleiro").innerHTML = html
+    atualizar_contadores()
 
 
-def copiar_cor(event):
-    cor = event.currentTarget.dataset.cor
-    window.navigator.clipboard.writeText(cor)
-    el("cor-aviso").innerText = f"{cor} copiado!"
+def atualizar_contadores():
+    bandeiras = 0
+    abertas = 0
+    for l in range(campo["linhas"]):
+        for c in range(campo["colunas"]):
+            if campo["estado"][l][c] == "bandeira":
+                bandeiras += 1
+            elif campo["estado"][l][c] == "aberta":
+                abertas += 1
+
+    seguras = campo["linhas"] * campo["colunas"] - campo["total_minas"]
+    el("minas-restantes").innerText = str(campo["total_minas"] - bandeiras)
+    el("minas-limpo").innerText = f"{abertas * 100 // seguras}%"
+
+
+def atualizar_relogio():
+    # corre a cada segundo (ver o fim do ficheiro)
+    if campo["ativo"] and not campo["primeiro"]:
+        el("minas-tempo").innerText = str(int(time.time() - campo["inicio"]))
+
+
+def casa_clicada(event):
+    # descobre em que casa se clicou (ou None se foi entre as casas)
+    botao = event.target.closest("[data-celula]")
+    if not botao:
+        return None
+    l, c = botao.dataset.celula.split("-")
+    return int(l), int(c)
+
+
+@when("click", "#minas-tabuleiro")
+def clicar_tabuleiro(event):
+    casa = casa_clicada(event)
+    if casa is None:
+        return
+    l, c = casa
+    if el("minas-bandeira").checked:
+        marcar_bandeira(l, c)
+    else:
+        jogar(l, c)
+
+
+@when("contextmenu", "#minas-tabuleiro")
+def clicar_direito(event):
+    event.preventDefault()  # não abre o menu do browser
+    casa = casa_clicada(event)
+    if casa is not None:
+        marcar_bandeira(casa[0], casa[1])
+
+
+def procurar_dica():
+    # extensão com IA: pensa como um jogador experiente.
+    # Para cada número aberto, olha para as casas fechadas e as bandeiras à volta.
+    for l in range(campo["linhas"]):
+        for c in range(campo["colunas"]):
+            if campo["estado"][l][c] != "aberta":
+                continue
+            numero = contar_minas_perto(l, c)
+            if numero == 0:
+                continue
+
+            fechadas = []
+            bandeiras = 0
+            for nl, nc in vizinhos(l, c):
+                if campo["estado"][nl][nc] == "fechada":
+                    fechadas.append((nl, nc))
+                elif campo["estado"][nl][nc] == "bandeira":
+                    bandeiras += 1
+            if not fechadas:
+                continue
+
+            # regra 1: o número já tem as bandeiras todas -> o resto é seguro
+            if bandeiras == numero:
+                return fechadas[0], (
+                    f"Este {numero} já tem {bandeiras} bandeira(s) à volta, "
+                    "por isso a casa a piscar é segura (se as tuas bandeiras estiverem certas). ✅"
+                )
+            # regra 2: só sobram tantas casas como minas em falta -> são todas minas
+            if bandeiras + len(fechadas) == numero:
+                return fechadas[0], (
+                    f"Este {numero} só tem {len(fechadas) + bandeiras} casa(s) livre(s) à volta, "
+                    "por isso a casa a piscar é uma mina. Põe lá uma bandeira! 🚩"
+                )
+    return None, "Não encontrei nenhuma jogada 100% segura... desta vez tens de arriscar! 🎲"
+
+
+@when("click", "#btn-minas-dica")
+def pedir_dica(event):
+    if not campo["ativo"]:
+        mensagem_minas("Começa um jogo novo primeiro.")
+        return
+    if campo["primeiro"]:
+        mensagem_minas("💡 Podes clicar em qualquer casa: o primeiro clique nunca tem mina.")
+        return
+    casa, explicacao = procurar_dica()
+    campo["dica"] = casa
+    mensagem_minas(f"💡 {explicacao}")
+    desenhar_campo()
 
 
 # =====================================================================
@@ -513,6 +716,9 @@ def terminar_jogo():
 # Arranque: prepara a página e esconde o ecrã de carregamento
 # =====================================================================
 analisar_poema()
-usar_preset(1920, 1080)
-gerar_paleta()
+novo_campo()
+
+# o cronómetro do campo minado atualiza a cada 1000 ms (1 segundo)
+window.setInterval(create_proxy(atualizar_relogio), 1000)
+
 el("loading").remove()

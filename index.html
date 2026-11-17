@@ -238,20 +238,40 @@
             text-align: center;
         }
 
-        /* amostras de cor da paleta (criadas pelo app.py) */
-        .amostra {
-            border: 2px solid var(--color-tinta);
-            box-shadow: 3px 3px 0 var(--color-tinta);
+        /* casas do campo minado (criadas pelo app.py) */
+        .celula {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--color-branco);
+            font-family: var(--font-barra);
+            font-size: clamp(8px, 2.4vw, 14px);
         }
-        .amostra:hover {
-            transform: translateY(-4px);
+        .celula img {
+            width: 75%;
+            height: 75%;
+        }
+        /* casa fechada: parece um botão "levantado" (luz em cima, sombra em baixo) */
+        .celula-fechada {
+            background: var(--color-gelo);
+            box-shadow: inset -3px -3px 0 var(--color-azul), inset 3px 3px 0 var(--color-branco);
+            cursor: pointer;
+        }
+        .celula-fechada:hover {
+            background: var(--color-sol);
+        }
+        .celula-fechada:active {
+            box-shadow: none;
+        }
+        /* casa sugerida pela dica: pisca aos saltos */
+        .celula-dica {
+            animation: piscar-dica 0.6s steps(1) infinite;
+        }
+        @keyframes piscar-dica {
+            50% { background: var(--color-sol); }
         }
 
-        input[type="color"] {
-            border: 2px solid var(--color-tinta);
-            padding: 2px;
-            background: var(--color-branco);
-        }
         input[type="range"] {
             accent-color: var(--color-coral);
         }
@@ -385,9 +405,9 @@
                 <img src="Assets/icons/poema.svg" alt="">
                 <span>poema</span>
             </button>
-            <button class="icone" data-abrir="janela-ecra">
-                <img src="Assets/icons/ecra.svg" alt="">
-                <span>ecrã</span>
+            <button class="icone" data-abrir="janela-minas">
+                <img src="Assets/icons/minas.svg" alt="">
+                <span>minas</span>
             </button>
             <button class="icone" data-abrir="janela-adivinha">
                 <img src="Assets/icons/adivinha.svg" alt="">
@@ -447,54 +467,39 @@ E para diante naveguei.</textarea>
         </div>
     </section>
 
-    <!-- ============ JANELA 2 - Validador Multimédia ============ -->
-    <section id="janela-ecra" class="janela" hidden>
+    <!-- ============ JANELA 2 - Campo Minado ============ -->
+    <section id="janela-minas" class="janela" hidden>
         <div class="janela-titulo">
-            <span>ecra.py · validador multimédia</span>
+            <span>minas.py · campo minado</span>
             <button class="fechar" data-fechar aria-label="Fechar">x</button>
         </div>
         <div class="janela-corpo">
-            <p class="text-tinta/70">Resolução, proporção do ecrã e paleta de cores.</p>
+            <p class="text-tinta/70">Abre todas as casas sem pisar nenhuma mina. Clique direito põe uma bandeira.</p>
 
-            <div class="flex flex-wrap gap-2">
-                <button data-preset="1280x720" class="botao botao-claro botao-pequeno">HD</button>
-                <button data-preset="1920x1080" class="botao botao-claro botao-pequeno">Full HD</button>
-                <button data-preset="3840x2160" class="botao botao-claro botao-pequeno">4K</button>
-                <button data-preset="1024x768" class="botao botao-claro botao-pequeno">4:3</button>
-                <button data-preset="1080x1080" class="botao botao-claro botao-pequeno">Instagram</button>
-                <button data-preset="1080x1920" class="botao botao-claro botao-pequeno">Stories</button>
+            <div class="flex flex-wrap items-center gap-2">
+                <select id="minas-nivel" class="campo">
+                    <option value="1">Fácil (8×8, 10 minas)</option>
+                    <option value="2" selected>Médio (10×10, 16 minas)</option>
+                    <option value="3">Difícil (12×12, 28 minas)</option>
+                </select>
+                <button id="btn-minas-novo" class="botao">Novo jogo</button>
+                <button id="btn-minas-dica" class="botao botao-claro">Dica</button>
             </div>
 
-            <div class="flex items-end gap-2">
-                <label class="flex-1 text-sm">Largura (px)
-                    <input id="res-largura" type="number" min="1" class="campo mt-1 w-full">
-                </label>
-                <span class="pb-2">×</span>
-                <label class="flex-1 text-sm">Altura (px)
-                    <input id="res-altura" type="number" min="1" class="campo mt-1 w-full">
-                </label>
-                <button id="btn-validar" class="botao">Validar</button>
+            <div class="grid grid-cols-3 gap-2">
+                <div class="caixa"><p id="minas-restantes" class="text-xl font-semibold">0</p><p class="text-sm">minas por marcar</p></div>
+                <div class="caixa"><p id="minas-tempo" class="text-xl font-semibold">0</p><p class="text-sm">segundos</p></div>
+                <div class="caixa"><p id="minas-limpo" class="text-xl font-semibold">0%</p><p class="text-sm">campo limpo</p></div>
             </div>
 
-            <div class="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
-                <div id="res-resultado"></div>
-                <div class="flex h-36 items-center justify-center">
-                    <div id="res-preview"
-                        class="flex max-h-full max-w-full items-center justify-center border-2 border-dashed border-tinta bg-gelo text-sm"
-                        style="width: 100%; aspect-ratio: 16 / 9;"></div>
-                </div>
-            </div>
+            <!-- o app.py desenha aqui as casas (uma grelha de botões) -->
+            <div id="minas-tabuleiro" class="mx-auto grid w-full max-w-[440px] select-none gap-0.5 border-4 border-tinta bg-tinta"></div>
 
-            <hr class="border-t-2 border-dashed border-tinta">
+            <label class="flex cursor-pointer items-center gap-3">
+                <input id="minas-bandeira" type="checkbox"> Modo bandeira (útil no telemóvel)
+            </label>
 
-            <div>
-                <div class="mb-2 flex items-center justify-between">
-                    <h3 class="font-semibold">Paleta de cores (Hex)</h3>
-                    <input id="cor-base" type="color" value="#e8533f" class="h-9 w-14 cursor-pointer">
-                </div>
-                <div id="paleta" class="grid grid-cols-2 gap-3 sm:grid-cols-3"></div>
-                <p id="cor-aviso" class="mt-3 h-5 text-sm text-tinta/70">Clica numa cor para copiar o código.</p>
-            </div>
+            <p id="minas-mensagem" class="min-h-12"></p>
         </div>
     </section>
 

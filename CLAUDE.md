@@ -26,7 +26,7 @@ Deployed with GitHub Pages from the repo root (repo: github.com/7rc3/T2_2026_Raf
 - `Assets/icons/*.svg`: 16×16 pixel-art icons made of `<rect>` rows (`shape-rendering="crispEdges"`), shown at 4× on the desktop and 2× in the taskbar.
 - `app.py`: all logic, running in the browser. It reads and writes the DOM through `pyscript.document` by element id, and binds events with `@when("event", "#id")`. Handlers decorated with `@when` are thin wrappers that call plain functions, so the plain functions can also run at startup. The last lines of `app.py` render the initial state and remove the `#loading` overlay.
 - Python inserts HTML strings that contain Tailwind classes. The Tailwind browser build compiles those classes at runtime, so dynamic classes work.
-- The three widgets are adapted from the notebooks: poem analyzer (word frequency, ficha 6.1/7), resolution, aspect ratio and hex palette (exercise 1.3.1), and guess-the-number with hints (JOGO DA ADIVINHA). The "AI extensions" are code written with AI help. There are no live LLM API calls, because a static site can't hide an API key.
+- The three widgets: poem analyzer (word frequency, ficha 6.1/7), minesweeper (`minas.py` window; 2D lists, loops, if/elif; first click always safe; its "AI" hint button finds a guaranteed safe cell or mine by simple logic), and guess-the-number with hints (JOGO DA ADIVINHA). Board cells are HTML buttons built by `app.py`, styled by `.celula` / `.celula-fechada` in `index.html`, with `Assets/icons/mina.svg` and `bandeira.svg`. The "AI extensions" are code written with AI help. There are no live LLM API calls, because a static site can't hide an API key.
 - Pyodide has no `wordcloud` package, so the word cloud is made of HTML spans sized by frequency.
 
 ## Old files
