@@ -360,7 +360,7 @@ def comecar_jogo(event):
     else:
         jogo["total"] = 5
 
-    jogo["secreto"] = random.randrange(1, 101)
+    jogo["secreto"] = 0  # 0 = ainda não escolhido (só escolhemos depois do 1.º chute)
     jogo["tentativas"] = 0
     jogo["minimo"] = 1
     jogo["maximo"] = 100
@@ -387,7 +387,7 @@ def dica_extra():
             if secreto % divisor == 0:
                 return f"O número é múltiplo de {divisor}."
         return "O número não é múltiplo de 3, 5, 7 nem 10."
-    if tentativa == 4:
+    if tentativa == 4 and secreto > 10:
         return f"A soma dos algarismos é {sum(int(a) for a in str(secreto))}."
     return ""
 
@@ -425,6 +425,13 @@ def tentar():
     if chute < 1 or chute > 100:
         mostrar_mensagem("Por favor, digita um número entre 1 e 100!", "font-semibold text-coral")
         return
+
+    # no primeiro chute, escolhe o número secreto, mas nunca igual ao chute
+    if jogo["secreto"] == 0:
+        numero = random.randrange(1, 101)
+        while numero == chute:
+            numero = random.randrange(1, 101)
+        jogo["secreto"] = numero
 
     jogo["tentativas"] += 1
     secreto = jogo["secreto"]
